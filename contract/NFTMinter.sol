@@ -3,16 +3,26 @@ pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/utils/Counters.sol";
 
-contract NFTMint is ERC721URIStorage, Ownable {
-    uint256 public tokenCounter;
+contract NFTMinter is ERC721URIStorage, Ownable, ReentrancyGuard {
+    using Counters for Counters.Counter;
+    Counters.Counter private _tokenIds;
 
     constructor() ERC721("StudentNFT", "SNFT") Ownable(msg.sender) {}
 
-    function mintNFT(string memory tokenURI) public {
-        uint256 newId = tokenCounter;
-        _safeMint(msg.sender, newId);
-        _setTokenURI(newId, tokenURI);
-        tokenCounter += 1;
+    function mintNFT(address recipient, string memory tokenURI)
+        public
+        nonReentrant
+        returns (uint256)
+    {
+        _tokenIds.increment();
+        uint256 newItemId = _tokenIds.current();
+
+        _safeMint(recipient, newItemId);
+        _setTokenURI(newItemId, tokenURI);
+
+        return newItemId;
     }
 }

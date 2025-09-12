@@ -128,13 +128,24 @@
 	{
 		"inputs": [
 			{
+				"internalType": "address",
+				"name": "recipient",
+				"type": "address"
+			},
+			{
 				"internalType": "string",
 				"name": "tokenURI",
 				"type": "string"
 			}
 		],
 		"name": "mintNFT",
-		"outputs": [],
+		"outputs": [
+			{
+				"internalType": "uint256",
+				"name": "",
+				"type": "uint256"
+			}
+		],
 		"stateMutability": "nonpayable",
 		"type": "function"
 	},
@@ -532,19 +543,6 @@
 				"internalType": "string",
 				"name": "",
 				"type": "string"
-			}
-		],
-		"stateMutability": "view",
-		"type": "function"
-	},
-	{
-		"inputs": [],
-		"name": "tokenCounter",
-		"outputs": [
-			{
-				"internalType": "uint256",
-				"name": "",
-				"type": "uint256"
 			}
 		],
 		"stateMutability": "view",
