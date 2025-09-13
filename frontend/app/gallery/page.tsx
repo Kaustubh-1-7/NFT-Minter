@@ -2,7 +2,9 @@
 
 import { useEffect, useState, useMemo } from 'react';
 import { useReadContracts } from 'wagmi';
-import { abi } from '../../contract/NFTMinter_ABI.json';
+import { abi as rawAbi } from '../../contract/NFTMinter_ABI.json';
+import type { Abi } from 'viem';
+const abi = rawAbi as Abi;
 import { NFTCard, NFTMetadata } from '../components/NFTCard';
 import { GalleryFilter } from '../components/GalleryFilter';
 import Link from 'next/link';
