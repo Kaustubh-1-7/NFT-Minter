@@ -8,17 +8,20 @@ import { usePrivy } from "@privy-io/react-auth";
 import Link from "next/link";
 import type { Abi } from 'viem';
 
+// Type definition for a single attribute
 type Attribute = {
   trait_type: string;
   value: string;
 };
 
+// Type definition for the different stages of the minting process
 type MintStatus = "idle" | "uploading" | "confirming" | "error" | "success";
 
 export default function MintPage() {
   const { isPending } = useWriteContract();
   const { ready, authenticated, user, login, logout } = usePrivy();
 
+  // State to hold the user's wallet address from Privy
   const [address, setAddress] = useState<`0x${string}` | undefined>();
   useEffect(() => {
     if (user?.wallet?.address) {
@@ -33,18 +36,17 @@ export default function MintPage() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  
+  // State for the NFT attributes. The trait_type is now fixed.
   const [attributes, setAttributes] = useState<Attribute[]>([
     { trait_type: "Branch", value: "" },
     { trait_type: "Roll No", value: "" },
   ]);
 
-  const handleAttributeChange = (
-    index: number,
-    field: keyof Attribute,
-    value: string
-  ) => {
+  // Simplified handler since only the 'value' of an attribute can be changed.
+  const handleAttributeValueChange = (index: number, value: string) => {
     const newAttributes = [...attributes];
-    newAttributes[index][field] = value;
+    newAttributes[index].value = value;
     setAttributes(newAttributes);
   };
 
@@ -60,10 +62,16 @@ export default function MintPage() {
       alert("Please provide an image, name, and description.");
       return;
     }
+    // Validation to ensure attribute values are filled
+    if (attributes.some(attr => !attr.value)) {
+      alert("Please fill in all attribute values (Branch and Roll No).");
+      return;
+    }
 
     setMintStatus("uploading");
 
     try {
+      // 1. Upload Image to Pinata (IPFS)
       const imageFormData = new FormData();
       imageFormData.append("file", imageFile);
       const imageRes = await fetch(
@@ -82,6 +90,7 @@ export default function MintPage() {
       }
       const imageIpfsHash = imageData.IpfsHash;
 
+      // 2. Prepare and Upload Metadata to Pinata (IPFS)
       const metadata = {
         name,
         description,
@@ -108,6 +117,7 @@ export default function MintPage() {
 
       setMintStatus("confirming");
 
+      // 3. Mint the NFT on the blockchain
       const tx = await writeContractAsync({
         address: process.env.NEXT_PUBLIC_CONTRACT_ADDRESS as `0x${string}`,
         abi: abi as Abi, 
@@ -122,12 +132,14 @@ export default function MintPage() {
       alert("An error occurred during minting. See console for details.");
       setMintStatus("error");
     } finally {
+      // Reset the button state after 3 seconds
       setTimeout(() => {
         setMintStatus("idle");
       }, 3000);
     }
   };
 
+  // Display a loading indicator while Privy is initializing
   if (!ready) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center bg-gray-900 text-white">
@@ -136,6 +148,7 @@ export default function MintPage() {
     );
   }
 
+  // Helper function to get the dynamic text for the mint button
   const getButtonText = () => {
     if (mintStatus === "uploading") return "Uploading to IPFS...";
     if (isPending || mintStatus === "confirming") return "Confirming in wallet...";
@@ -147,6 +160,7 @@ export default function MintPage() {
   return (
     <>
       <main className="flex min-h-screen bg-gradient-to-br from-gray-900 to-gray-800 p-8 text-white gap-8">
+        {/* Left Panel: Privy Login / User Details */}
         <div className="flex-1 flex items-center justify-center">
           {authenticated && user ? (
             <div className="w-full max-w-2xl">
@@ -210,6 +224,8 @@ export default function MintPage() {
             </div>
           )}
         </div>
+        
+        {/* Right Panel: Minting Form */}
         <div className="flex-1 flex flex-col items-center">
           <header className="w-full text-center mb-8">
             <h1 className="text-4xl font-bold">Mint a new Student NFT</h1>
@@ -249,40 +265,39 @@ export default function MintPage() {
                 <textarea
                   id="description"
                   value={description}
-                  placeholder="desc."
+                  placeholder="e.g., A dedicated student of the 2025 batch."
                   onChange={(e) => setDescription(e.target.value)}
                   rows={3}
                   className="mt-1 block w-full p-2 border border-gray-600 rounded-md bg-gray-900 text-white"
                 />
               </div>
+
               <h3 className="text-lg font-medium mb-2">Attributes</h3>
-              {attributes.map((attr, index) => (
-                <div key={index} className="flex gap-4 mb-2">
-                  <input
-                    type="text"
-                    placeholder="Trait Type (e.g., Color)"
-                    value={attr.trait_type}
-                    onChange={(e) =>
-                      handleAttributeChange(index, "trait_type", e.target.value)
-                    }
-                    className="flex-1 p-2 border border-gray-600 rounded-md bg-gray-900 text-white"
-                  />
-                  <input
-                    type="text"
-                    placeholder="Value"
-                    value={attr.value}
-                    onChange={(e) =>
-                      handleAttributeChange(index, "value", e.target.value)
-                    }
-                    className="flex-1 p-2 border border-gray-600 rounded-md bg-gray-900 text-white"
-                  />
-                </div>
-              ))}
+              <div className="space-y-3">
+                {attributes.map((attr, index) => (
+                  <div key={index} className="flex items-center gap-4">
+                    {/* This is the non-editable label for the trait type */}
+                    <div className="flex-1 text-center px-3 py-2 border border-gray-600 rounded-md bg-gray-800 text-gray-300 font-semibold">
+                      {attr.trait_type}
+                    </div>
+                    {/* This is the editable input for the trait value */}
+                    <input
+                      type="text"
+                      placeholder="Value"
+                      value={attr.value}
+                      onChange={(e) =>
+                        handleAttributeValueChange(index, e.target.value)
+                      }
+                      className="flex-1 p-2 border border-gray-600 rounded-md bg-gray-900 text-white"
+                    />
+                  </div>
+                ))}
+              </div>
 
               <button
                 onClick={handleMint}
                 disabled={mintStatus !== "idle" || isPending}
-                className="w-full mt-4 py-3 px-4 bg-green-600 text-white font-bold rounded-md hover:bg-green-700 disabled:bg-gray-500 disabled:cursor-not-allowed"
+                className="w-full mt-6 py-3 px-4 bg-green-600 text-white font-bold rounded-md hover:bg-green-700 disabled:bg-gray-500 disabled:cursor-not-allowed"
               >
                 {getButtonText()}
               </button>
