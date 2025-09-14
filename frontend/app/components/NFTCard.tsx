@@ -27,10 +27,8 @@ export function NFTCard({ metadata }: NFTCardProps) {
 
   return (
     <div className="relative rounded-2xl overflow-hidden shadow-xl hover:shadow-2xl transition-all duration-500 group">
-      {/* Neon gradient border */}
       <div className="absolute inset-0 bg-gradient-to-r from-fuchsia-500 via-cyan-400 to-purple-600 animate-gradient-x opacity-90"></div>
 
-      {/* Inner glass container */}
       <div className="relative z-10 bg-black/70 backdrop-blur-md border border-white/20 rounded-2xl overflow-hidden">
         <img
           src={resolveIpfsUrl(metadata.image)}

@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { useWriteContract } from "wagmi";
 import { ImageDropzone } from "../components/ImageDropzone";
-import { abi } from "../../contract/NFTMinter_ABI.json";
+import { abi } from "../contract/NFTMinter_ABI.json";
 import { usePrivy } from "@privy-io/react-auth";
 import Link from "next/link";
 import type { Abi } from 'viem';
@@ -16,11 +16,9 @@ type Attribute = {
 type MintStatus = "idle" | "uploading" | "confirming" | "error" | "success";
 
 export default function MintPage() {
-  // We use `useAccount`'s isPending state to know when wagmi is working with the wallet.
   const { isPending } = useWriteContract();
   const { ready, authenticated, user, login, logout } = usePrivy();
 
-  // CHANGE 1: Get the user's wallet address from Privy and store it in state
   const [address, setAddress] = useState<`0x${string}` | undefined>();
   useEffect(() => {
     if (user?.wallet?.address) {
@@ -51,7 +49,6 @@ export default function MintPage() {
   };
 
   const handleMint = async () => {
-    // CHANGE 2: Add a check to ensure we have the recipient's address.
     if (!address) {
       alert("Could not find your wallet address. Please ensure it's connected.");
       return;
@@ -111,11 +108,9 @@ export default function MintPage() {
 
       setMintStatus("confirming");
 
-      // CHANGE 3: Update the arguments array to match the contract.
-      // The contract expects: mintNFT(address recipient, string memory tokenURI)
       const tx = await writeContractAsync({
         address: process.env.NEXT_PUBLIC_CONTRACT_ADDRESS as `0x${string}`,
-        abi: abi as Abi, // Cast abi to Abi type for type safety
+        abi: abi as Abi, 
         functionName: "mintNFT",
         args: [address, `ipfs://${metadataIpfsHash}`],
       });
