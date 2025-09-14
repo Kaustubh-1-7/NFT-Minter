@@ -1,13 +1,15 @@
+// app/gallery/page.tsx
 'use client';
 
 import { useEffect, useState, useMemo } from 'react';
 import { useReadContracts } from 'wagmi';
 import { abi as rawAbi } from '../../contract/NFTMinter_ABI.json';
 import type { Abi } from 'viem';
-const abi = rawAbi as Abi;
 import { NFTCard, NFTMetadata } from '../components/NFTCard';
 import { GalleryFilter } from '../components/GalleryFilter';
 import Link from 'next/link';
+
+const abi = rawAbi as Abi;
 
 const resolveIpfsUrl = (ipfsUrl: string): string => {
   if (!ipfsUrl || !ipfsUrl.startsWith('ipfs://')) return ipfsUrl;
@@ -18,83 +20,101 @@ const resolveIpfsUrl = (ipfsUrl: string): string => {
 export default function GalleryPage() {
   const [allNfts, setAllNfts] = useState<NFTMetadata[]>([]);
   const [filters, setFilters] = useState<Record<string, string>>({});
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
 
   const contractAddress = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS as `0x${string}`;
 
-  const { data: tokenCounterData } = useReadContracts({
+  // Step 1: Fetch the total number of minted tokens using the correct `totalMinted` function.
+  const { data: totalMintedData, isLoading: isLoadingTotalSupply } = useReadContracts({
     contracts: [{
       address: contractAddress,
       abi,
-      functionName: 'tokenCounter',
+      functionName: 'totalMinted',
     }]
   });
-  const tokenCounter = tokenCounterData?.[0].status === 'success' ? Number(tokenCounterData[0].result) : 0;
+  const totalMinted = totalMintedData?.[0].status === 'success' ? Number(totalMintedData[0].result) : 0;
 
+  // Step 2: Prepare the list of all token URI calls based on the total supply.
+  // This uses 1-based indexing as per your new contract (IDs 1, 2, 3, ...).
   const tokenUriContracts = useMemo(() => {
-    return Array.from({ length: tokenCounter }, (_, i) => ({
+    if (totalMinted === 0) return [];
+    
+    const tokenIds = Array.from({ length: totalMinted }, (_, i) => BigInt(i + 1));
+
+    return tokenIds.map(tokenId => ({
       address: contractAddress,
       abi,
-      functionName: 'tokenURI',
-      args: [BigInt(i)],
+      functionName: 'getTokenURI', // Use the correct getTokenURI function
+      args: [tokenId],
     }));
-  }, [tokenCounter, contractAddress]);
+  }, [totalMinted, contractAddress]);
 
+  // Step 3: Fetch all token URIs at once using the declarative hook.
+  // This is much more reliable with providers like Privy.
   const { data: tokenUrisData } = useReadContracts({
     contracts: tokenUriContracts,
-    query: { enabled: tokenCounter > 0 },
+    // Only run this query after we have the total count.
+    query: { enabled: totalMinted > 0 },
   });
 
+  // Step 4: Process the fetched URIs and get the metadata from IPFS.
   useEffect(() => {
     const fetchMetadata = async () => {
-      if (!tokenUrisData || tokenUrisData.length === 0) {
+      // Don't proceed if the first hook is still loading.
+      if (isLoadingTotalSupply) {
+        return;
+      }
+      
+      // If we have a total count, but no URI data yet, wait.
+      if (totalMinted > 0 && !tokenUrisData) {
+        return;
+      }
+
+      // If there are no NFTs, stop the loading process.
+      if (totalMinted === 0) {
         setIsLoading(false);
         return;
       }
 
-      setIsLoading(true);
-      const metadataPromises = tokenUrisData
-        .filter(uriData => uriData.status === 'success' && uriData.result)
-        .map(uriData => fetch(resolveIpfsUrl(uriData.result as string)).then(res => res.json()));
-      
-      try {
-        const metadatas = await Promise.all(metadataPromises);
-        setAllNfts(metadatas);
-      } catch (error) {
-        console.error("Failed to fetch metadata:", error);
-      } finally {
-        setIsLoading(false);
+      // If we have URI data, fetch the metadata for each one.
+      if (tokenUrisData) {
+        const metadataPromises = tokenUrisData
+          .filter(uriData => uriData.status === 'success' && uriData.result)
+          .map(uriData => fetch(resolveIpfsUrl(uriData.result as string)).then(res => res.json()));
+        
+        try {
+          const metadatas = await Promise.all(metadataPromises);
+          setAllNfts(metadatas);
+        } catch (error) {
+          console.error("Failed to fetch metadata from IPFS:", error);
+        } finally {
+          setIsLoading(false); // Stop loading after all processing is done.
+        }
       }
     };
 
     fetchMetadata();
-  }, [tokenUrisData]);
+  }, [tokenUrisData, totalMinted, isLoadingTotalSupply]);
 
+  // Filtering logic remains the same.
   const filteredNfts = useMemo(() => {
-    if (Object.keys(filters).length === 0) {
-      return allNfts;
-    }
-
-    return allNfts.filter(nft => {
-      return Object.entries(filters).every(([traitType, value]) => {
+    if (Object.keys(filters).length === 0) return allNfts;
+    return allNfts.filter(nft => 
+      Object.entries(filters).every(([traitType, value]) => {
         if (!value) return true; 
         return nft.attributes.some(attr => attr.trait_type === traitType && attr.value === value);
-      });
-    });
+      })
+    );
   }, [allNfts, filters]);
 
   const handleFilterChange = (newFilter: Record<string, string>) => {
     const traitType = Object.keys(newFilter)[0];
     const value = Object.values(newFilter)[0];
-    
-    setFilters(prevFilters => {
-      const updatedFilters = { ...prevFilters };
-      if (value) {
-        updatedFilters[traitType] = value;
-      } else {
-        delete updatedFilters[traitType];
-      }
-      return updatedFilters;
+    setFilters(prev => {
+      const updated = { ...prev };
+      if (value) updated[traitType] = value;
+      else delete updated[traitType];
+      return updated;
     });
   };
 
@@ -108,14 +128,14 @@ export default function GalleryPage() {
       </header>
       
       {isLoading ? (
-        <p className="text-center">Loading NFTs...</p>
+        <p className="text-center text-lg">Loading NFTs...</p>
       ) : allNfts.length > 0 ? (
         <>
           <GalleryFilter nfts={allNfts} onFilterChange={handleFilterChange} />
           {filteredNfts.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
               {filteredNfts.map((nft, index) => (
-                <NFTCard key={index} metadata={nft} />
+                <NFTCard key={nft.name + index} metadata={nft} />
               ))}
             </div>
           ) : (

@@ -1,12 +1,12 @@
 "use client";
 
-import { useState } from "react";
-import { useAccount, useWriteContract } from "wagmi";
+import { useState, useEffect } from "react";
+import { useWriteContract } from "wagmi";
 import { ImageDropzone } from "../components/ImageDropzone";
 import { abi } from "../../contract/NFTMinter_ABI.json";
 import { usePrivy } from "@privy-io/react-auth";
-
 import Link from "next/link";
+import type { Abi } from 'viem';
 
 type Attribute = {
   trait_type: string;
@@ -16,12 +16,22 @@ type Attribute = {
 type MintStatus = "idle" | "uploading" | "confirming" | "error" | "success";
 
 export default function MintPage() {
-  const { isConnected } = useAccount();
-  const { writeContractAsync, isPending } = useWriteContract();
+  // We use `useAccount`'s isPending state to know when wagmi is working with the wallet.
+  const { isPending } = useWriteContract();
   const { ready, authenticated, user, login, logout } = usePrivy();
 
-  const [mintStatus, setMintStatus] = useState<MintStatus>("idle");
+  // CHANGE 1: Get the user's wallet address from Privy and store it in state
+  const [address, setAddress] = useState<`0x${string}` | undefined>();
+  useEffect(() => {
+    if (user?.wallet?.address) {
+      setAddress(user.wallet.address as `0x${string}`);
+    } else {
+      setAddress(undefined);
+    }
+  }, [user]);
 
+  const { writeContractAsync } = useWriteContract();
+  const [mintStatus, setMintStatus] = useState<MintStatus>("idle");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
@@ -41,6 +51,11 @@ export default function MintPage() {
   };
 
   const handleMint = async () => {
+    // CHANGE 2: Add a check to ensure we have the recipient's address.
+    if (!address) {
+      alert("Could not find your wallet address. Please ensure it's connected.");
+      return;
+    }
     if (mintStatus !== "idle" || isPending) {
       return;
     }
@@ -96,11 +111,13 @@ export default function MintPage() {
 
       setMintStatus("confirming");
 
+      // CHANGE 3: Update the arguments array to match the contract.
+      // The contract expects: mintNFT(address recipient, string memory tokenURI)
       const tx = await writeContractAsync({
         address: process.env.NEXT_PUBLIC_CONTRACT_ADDRESS as `0x${string}`,
-        abi,
+        abi: abi as Abi, // Cast abi to Abi type for type safety
         functionName: "mintNFT",
-        args: [`ipfs://${metadataIpfsHash}`],
+        args: [address, `ipfs://${metadataIpfsHash}`],
       });
 
       setMintStatus("success");
@@ -126,8 +143,7 @@ export default function MintPage() {
 
   const getButtonText = () => {
     if (mintStatus === "uploading") return "Uploading to IPFS...";
-    if (isPending || mintStatus === "confirming")
-      return "Confirming in wallet...";
+    if (isPending || mintStatus === "confirming") return "Confirming in wallet...";
     if (mintStatus === "success") return "Minted Successfully!";
     if (mintStatus === "error") return "Minting Failed";
     return "Mint NFT";
@@ -153,35 +169,28 @@ export default function MintPage() {
                   onClick={logout}
                   className="flex items-center gap-2 rounded-lg bg-gray-700 px-4 py-2 text-base font-semibold text-white transition hover:bg-gray-600"
                 >
-                  
                   <span>Logout</span>
                 </button>
               </div>
               <div className="mt-8 rounded-2xl bg-gray-800 bg-opacity-50 p-8 shadow-lg backdrop-blur-lg">
-                
                 <h2 className="mb-6 text-xl font-semibold text-white">
                   User Details
                 </h2>
                 <div className="space-y-4">
-                  
                   <div>
-                    
                     <p className="text-sm font-medium text-gray-400">
                       User ID
                     </p>
                     <pre className="mt-1 max-w-full overflow-x-auto rounded-md bg-gray-900 p-3 font-mono text-sm text-gray-300">
-                      
                       {user.id}
                     </pre>
                   </div>
                   {user.wallet && (
                     <div>
-                      
                       <p className="text-sm font-medium text-gray-400">
                         Wallet Address
                       </p>
                       <pre className="mt-1 max-w-full overflow-x-auto rounded-md bg-gray-900 p-3 font-mono text-sm text-gray-300">
-                        
                         {user.wallet.address}
                       </pre>
                     </div>
@@ -191,7 +200,6 @@ export default function MintPage() {
             </div>
           ) : (
             <div className="w-full max-w-md rounded-2xl bg-gray-800 bg-opacity-50 p-8 text-center shadow-lg backdrop-blur-lg">
-              
               <h1 className="mb-4 text-4xl font-bold">
                 Welcome to the Nft Minter
               </h1>
@@ -202,7 +210,6 @@ export default function MintPage() {
                 onClick={login}
                 className="w-full rounded-lg bg-violet-600 px-6 py-3 text-lg font-semibold text-white transition hover:bg-violet-700"
               >
-                
                 Log In
               </button>
             </div>
@@ -288,7 +295,7 @@ export default function MintPage() {
           ) : (
             <div className="flex flex-1 items-center justify-center">
               <p className="text-center text-gray-400">
-                Please connect your wallet to mint an NFT.
+                Please log in to mint an NFT.
               </p>
             </div>
           )}
